@@ -3,7 +3,7 @@ Google Cloud Run - SELECT simple de tabla fondeo_x en Oracle
 """
 
 import json
-import cx_Oracle
+import oracledb
 from flask import Flask
 from datetime import datetime
 
@@ -40,11 +40,11 @@ def ejecutar_select():
         print("\n[PASO 1] Conectando a Oracle...")
         
         try:
-            cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_21_13")
+            oracledb.init_oracle_client(lib_dir="/opt/oracle/instantclient_21_13")
         except:
             pass
         
-        conexion = cx_Oracle.connect(
+        conexion = oracledb.connect(
             user=DB_USER,
             password=DB_PASSWORD,
             dsn=TNS_STRING
