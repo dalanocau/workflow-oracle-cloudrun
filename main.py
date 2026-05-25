@@ -3,9 +3,12 @@ Google Cloud Run - SELECT simple de tabla fondeo_x en Oracle
 """
 
 import json
-import oracledb
+import os
+import logging
 from flask import Flask
-from datetime import datetime
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -31,29 +34,34 @@ DB_PASSWORD = "853Ala.@852853"  # CAMBIAR ESTO POR TU PASSWORD REAL
 def ejecutar_select():
     """Conecta a Oracle y hace SELECT de fondeo_x"""
     
-    print("="*70)
-    print("INICIANDO: SELECT de fondeo_x")
-    print("="*70)
+    logger.info("="*70)
+    logger.info("INICIANDO: SELECT de fondeo_x")
+    logger.info("="*70)
     
     try:
+        # IMPORTAR AQUÍ para no fallar al iniciar
+        import oracledb
+        
         # PASO 1: Conectar a Oracle
-        print("\n[PASO 1] Conectando a Oracle...")
+        logger.info("[PASO 1] Conectando a Oracle...")
         
         try:
             oracledb.init_oracle_client(lib_dir="/opt/oracle/instantclient_21_13")
-        except:
-            pass
+            logger.info("Oracle Client inicializado")
+        except Exception as e:
+            logger.info(f"Oracle Client no necesario: {e}")
         
         conexion = oracledb.connect(
             user=DB_USER,
             password=DB_PASSWORD,
-            dsn=TNS_STRING
+            dsn=TNS_STRING,
+            thick_mode=False  # Thin mode (no necesita Oracle Client)
         )
         
-        print("✓ Conexión exitosa")
+        logger.info("✓ Conexión exitosa")
         
         # PASO 2: Ejecutar SELECT
-        print("\n[PASO 2] Ejecutando SELECT...")
+        logger.info("[PASO 2] Ejecutando SELECT...")
         
         cursor = conexion.cursor()
         
@@ -64,74 +72,84 @@ def ejecutar_select():
         WHERE ROWNUM <= 5
         """
         
-        print(f"Query: {query}")
+        logger.info(f"Query: {query}")
         
         cursor.execute(query)
         
         # Obtener nombres de columnas
         columnas = [desc[0] for desc in cursor.description]
-        print(f"\nColumnas: {columnas}")
+        logger.info(f"Columnas: {columnas}")
         
         # Obtener datos
         datos = cursor.fetchall()
         
-        print(f"✓ {len(datos)} registros obtenidos\n")
+        logger.info(f"✓ {len(datos)} registros obtenidos")
         
         # Mostrar datos
-        print("DATOS:")
-        print("-" * 70)
+        logger.info("DATOS:")
+        logger.info("-" * 70)
         for i, fila in enumerate(datos, 1):
-            print(f"Fila {i}: {fila}")
-        print("-" * 70)
+            logger.info(f"Fila {i}: {fila}")
+        logger.info("-" * 70)
         
         cursor.close()
         conexion.close()
         
-        print("\n" + "="*70)
-        print("✓ QUERY COMPLETADA EXITOSAMENTE")
-        print("="*70)
+        logger.info("="*70)
+        logger.info("✓ QUERY COMPLETADA EXITOSAMENTE")
+        logger.info("="*70)
         
         return {
             'statusCode': 200,
             'mensaje': 'Éxito',
             'columnas': columnas,
             'registros': len(datos),
-            'datos': [dict(zip(columnas, fila)) for fila in datos]
+            'datos': [list(fila) for fila in datos]
         }
     
     except Exception as e:
-        print(f"\n✗ ERROR: {str(e)}")
+        logger.error(f"✗ ERROR: {str(e)}")
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         
         return {
             'statusCode': 500,
-            'error': str(e)
+            'error': str(e),
+            'tipo': type(e).__name__
         }
 
 # ============================================================================
-# ENDPOINT PARA CLOUD RUN
+# ENDPOINTS PARA CLOUD RUN
 # ============================================================================
 
 @app.route('/', methods=['GET', 'POST'])
 def main():
     """Endpoint que Cloud Run llama"""
+    logger.info("Recibida solicitud en /")
     resultado = ejecutar_select()
     
-    # Imprimir resultado para logs
-    print("\nRESULTADO JSON:")
-    print(json.dumps(resultado, indent=2, default=str))
+    logger.info("RESULTADO JSON:")
+    logger.info(json.dumps(resultado, indent=2, default=str))
     
     return json.dumps(resultado, default=str), resultado['statusCode']
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check para Cloud Run"""
-    return json.dumps({'status': 'ok'}), 200
+    """Health check para Cloud Run - IMPORTANTE para el inicio"""
+    logger.info("Health check OK")
+    return json.dumps({'status': 'ok', 'healthy': True}), 200
+
+@app.route('/test', methods=['GET'])
+def test():
+    """Test endpoint"""
+    logger.info("Test endpoint llamado")
+    return json.dumps({'message': 'Cloud Run está corriendo'}), 200
+
+# ============================================================================
+# MAIN
+# ============================================================================
 
 if __name__ == '__main__':
-    # Para testing local
-    resultado = ejecutar_select()
-    print("\n" + "="*70)
-    print("RESULTADO FINAL:")
-    print(json.dumps(resultado, indent=2, default=str))
+    port = int(os.environ.get('PORT', 8080))
+    logger.info(f"Iniciando Flask en puerto {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
