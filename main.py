@@ -54,8 +54,7 @@ def ejecutar_select():
         conexion = oracledb.connect(
             user=DB_USER,
             password=DB_PASSWORD,
-            dsn=TNS_STRING,
-            thick_mode=False  # Thin mode (no necesita Oracle Client)
+            dsn=TNS_STRING
         )
         
         logger.info("✓ Conexión exitosa")
